@@ -7,7 +7,7 @@ WHERE  PARSE_DATE("%Y%m%d", _TABLE_SUFFIX)> DATE_ADD(CURRENT_DATE(), INTERVAL -2
 AND _TABLE_SUFFIX NOT LIKE '%intr%' #using for streaming data
 ORDER BY event_date
 LIMIT 1000 
-
+---------------------------------------------
 
 -- GA3_DEDUPING QUERY RESULTS _WINDOW FUNCTION
 
@@ -20,8 +20,7 @@ first_value( visitStartTime) OVER (PARTITION BY channelGrouping order by visitSt
 FROM `bigquery-public-data.google_analytics_sample.ga_sessions_20170801` )
 WHERE visitStartTime= lv
 ORDER BY channelGrouping
-
-
+---------------------------------
 -- WINDOW FUNCTION_PAGEVIEW TABLE
 
 SELECT 
@@ -40,7 +39,7 @@ FROM (
   )
   WINDOW w1 as (PARTITION BY date)
     order by pct_of_pageviews
-    
+-------------------------
 -- UNNEST HITS
 
 SELECT new_event_params.*, events.* 
@@ -52,8 +51,7 @@ AND event_timestamp = 1627537423302745
 AND new_event_params.key = "page_location"
 AND new_event_params.value.string_value = "https://www.cafe24.vn/competition2021.html?gclid=EAIaIQobChMI5rOVxYyD8AIVasUWBR3HhAB3EAEYASAAEgKJvvD_BwE"
 LIMIT 1000
-
-
+--------------------------
 -- CREATE SESSION ID TABLE
 
 SELECT params.*, events.*,
@@ -66,19 +64,7 @@ FROM `ga4-landingpage.analytics_268605385.events_*` AS events
 LEFT JOIN UNNEST (event_params) AS params
 WHERE  PARSE_DATE("%Y%m%d", _TABLE_SUFFIX)> DATE_ADD(CURRENT_DATE(), INTERVAL -2 DAY)
 
-
-
-
-
-
-
-
-
-
-
-
-
-
+-------- OR ---------
 SELECT params.key, params.value.int_value, geo.*,traffic_source.*,
 PARSE_DATE("%Y%m%d", event_date) AS event_date,
 TIMESTAMP_MICROS(event_timestamp) AS event_ts,
@@ -87,14 +73,9 @@ OVER(PARTITION BY event_timestamp, user_pseudo_id        ) AS ga_session_id,
 FROM `ga4-landingpage.analytics_268605385.events_*` AS events
 LEFT JOIN UNNEST (event_params) AS params
 WHERE  PARSE_DATE("%Y%m%d", _TABLE_SUFFIX)> DATE_ADD(CURRENT_DATE(), INTERVAL -2 DAY)
+-------------------------------
 
-
-
-
-
-
-GA4_CREATE EVENTS LEVEL TABLE
-
+-- CREATE EVENTS LEVEL TABLE
 
 WITH 
 table1 as (SELECT * FROM ...),
@@ -128,7 +109,8 @@ FROM `ga4-landingpage.analytics_268605385.events_*` AS events
 LEFT JOIN UNNEST (event_params) AS params
 WHERE  PARSE_DATE("%Y%m%d", _TABLE_SUFFIX)> DATE_ADD(CURRENT_DATE(), INTERVAL -2 DAY)
 LIMIT 1000
-), event_aggregated AS (
+)
+, event_aggregated AS (
 SELECT 
 event_date,
 event_ts,
@@ -148,11 +130,13 @@ MAX(devide_system) AS devide_system,
 MAX(device_system_version) AS device_system_version
 FROM source_table
 GROUP BY 1,2,3,4,5,6
-)
-SELECT * FROM event_aggregated
+) SELECT * FROM event_aggregated
 ORDER BY event_date DESC, event_ts,
 ga_session_id
-GA4_CREATE SESSION TABLE
+
+------------------------
+
+-- GA4_CREATE SESSION TABLE
 WITH source_table AS (
 SELECT 
 PARSE_DATE("%Y%m%d", event_date) AS event_date,
