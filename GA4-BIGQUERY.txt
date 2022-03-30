@@ -1,0 +1,198 @@
+﻿GA4_ACCESS DATE PERIOD
+SELECT  DISTINCT PARSE_DATE('%Y%m%d', event_date) AS event_date,
+FROM `ga4-landingpage.analytics_268605385.events_*` 
+WHERE  PARSE_DATE("%Y%m%d", _TABLE_SUFFIX) BETWEEN '2021-07-24' AND '2021-07-26'
+WHERE  PARSE_DATE("%Y%m%d", _TABLE_SUFFIX)> DATE_ADD(CURRENT_DATE(), INTERVAL -2 DAY)
+AND _TABLE_SUFFIX NOT LIKE '%intr%' #using for streaming data
+ORDER BY event_date
+LIMIT 1000 
+
+
+GA3_DEDUPING QUERY RESULTS _WINDOW FUNCTION
+SELECT * FROM(
+SELECT 
+date,
+channelGrouping, totals.hits,
+visitStartTime,
+first_value( visitStartTime) OVER (PARTITION BY channelGrouping order by visitStartTime desc) lv
+FROM `bigquery-public-data.google_analytics_sample.ga_sessions_20170801` )
+WHERE visitStartTime= lv
+ORDER BY channelGrouping
+
+
+WINDOW FUNCTION
+SELECT 
+date,
+channelGrouping,
+pageviews/sum(pageviews) OVER w1 as pct_of_pageviews,
+avg(pageviews) OVER w1 as avg_pageviews 
+FROM (
+  SELECT 
+  date,
+  channelGrouping,
+  sum(totals.pageviews) as pageviews
+  FROM `bigquery-public-data.google_analytics_sample.ga_sessions_20170801`
+  group by channelGrouping, date
+  order by pageviews desc
+  )
+  WINDOW w1 as (PARTITION BY date)
+    order by pct_of_pageviews
+GA4_UNNEST HITS
+
+
+SELECT new_event_params.*, events.* 
+EXCEPT (event_params)
+FROM `ga4-landingpage.analytics_268605385.events_*` AS events
+LEFT JOIN UNNEST (event_params) AS new_event_params
+WHERE  PARSE_DATE("%Y%m%d", _TABLE_SUFFIX)> DATE_ADD(CURRENT_DATE(), INTERVAL -2 DAY)
+AND event_timestamp = 1627537423302745
+AND new_event_params.key = "page_location"
+AND new_event_params.value.string_value = "https://www.cafe24.vn/competition2021.html?gclid=EAIaIQobChMI5rOVxYyD8AIVasUWBR3HhAB3EAEYASAAEgKJvvD_BwE"
+LIMIT 1000
+
+
+GA4_GETTING SESSION ID 
+SELECT params.*, events.*,
+PARSE_DATE("%Y%m%d", event_date) AS event_date,
+TIMESTAMP_MICROS(event_timestamp) AS event_ts,
+MAX(CASE WHEN params.key = "ga_session_id" THEN params.value.int_value ELSE NULL END) 
+OVER(PARTITION BY event_timestamp, user_pseudo_id        ) AS ga_session_id,
+events.* EXCEPT (event_params, event_date, event_timestamp, app_info)
+FROM `ga4-landingpage.analytics_268605385.events_*` AS events
+LEFT JOIN UNNEST (event_params) AS params
+WHERE  PARSE_DATE("%Y%m%d", _TABLE_SUFFIX)> DATE_ADD(CURRENT_DATE(), INTERVAL -2 DAY)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+SELECT params.key, params.value.int_value, geo.*,traffic_source.*,
+PARSE_DATE("%Y%m%d", event_date) AS event_date,
+TIMESTAMP_MICROS(event_timestamp) AS event_ts,
+MAX(CASE WHEN params.key = "ga_session_id" THEN params.value.int_value ELSE NULL END) 
+OVER(PARTITION BY event_timestamp, user_pseudo_id        ) AS ga_session_id,
+FROM `ga4-landingpage.analytics_268605385.events_*` AS events
+LEFT JOIN UNNEST (event_params) AS params
+WHERE  PARSE_DATE("%Y%m%d", _TABLE_SUFFIX)> DATE_ADD(CURRENT_DATE(), INTERVAL -2 DAY)
+
+
+
+
+
+
+GA4_CREATE EVENTS LEVEL TABLE
+
+
+WITH 
+table1 as (SELECT * FROM ...),
+table2 as (SELECT * FROM table1)
+SELECT * FROM table2
+
+
+WITH source_table AS (
+SELECT 
+PARSE_DATE("%Y%m%d", event_date) AS event_date,
+TIMESTAMP_MICROS(event_timestamp) AS event_ts,
+MAX(CASE WHEN params.key = "ga_session_id" THEN params.value.int_value ELSE NULL END) OVER(PARTITION BY event_timestamp, user_pseudo_id        ) AS ga_session_id,
+user_id AS user_id,
+user_pseudo_id        AS user_pseudo_id,
+TIMESTAMP_MICROS(user_first_touch_timestamp        ) AS user_first_touch_ts,
+event_name AS event_name,
+params.key AS params_key,
+params.value.string_value         AS params_string_value,
+params.value.int_value AS params_int,
+traffic_source.source        AS channel,
+traffic_source.medium AS traffic_medium,
+MAX(CASE WHEN params.key = "page_title" THEN params.value.int_value ELSE NULL END) OVER(PARTITION BY event_timestamp, user_pseudo_id        ) AS ga_page_title,
+MAX(CASE WHEN params.key = "page_location" THEN params.value.int_value ELSE NULL END) OVER(PARTITION BY event_timestamp, user_pseudo_id        ) AS ga_page_location, 
+geo.city AS city, 
+device.category AS device, 
+device.mobile_brand_name        AS device_mobile_brand,
+device.mobile_marketing_name AS device_mobile_name,
+device.operating_system AS devide_system,
+device.operating_system_version AS device_system_version
+FROM `ga4-landingpage.analytics_268605385.events_*` AS events
+LEFT JOIN UNNEST (event_params) AS params
+WHERE  PARSE_DATE("%Y%m%d", _TABLE_SUFFIX)> DATE_ADD(CURRENT_DATE(), INTERVAL -2 DAY)
+LIMIT 1000
+), event_aggregated AS (
+SELECT 
+event_date,
+event_ts,
+ga_session_id,
+event_name,
+user_pseudo_id,
+user_first_touch_ts,
+MAX(channel) AS channel,
+MAX(traffic_medium) AS traffic_medium,
+MAX(ga_page_title) AS ga_page_title,
+MAX(ga_page_location) AS ga_page_location,
+MAX(city) AS city,
+MAX(device) AS device,
+MAX(device_mobile_brand) AS device_mobile_brand,
+MAX(device_mobile_name) AS device_mobile_name,
+MAX(devide_system) AS devide_system,
+MAX(device_system_version) AS device_system_version
+FROM source_table
+GROUP BY 1,2,3,4,5,6
+)
+SELECT * FROM event_aggregated
+ORDER BY event_date DESC, event_ts,
+ga_session_id
+GA4_CREATE SESSION TABLE
+WITH source_table AS (
+SELECT 
+PARSE_DATE("%Y%m%d", event_date) AS event_date,
+TIMESTAMP_MICROS(event_timestamp) AS event_ts,
+MAX(CASE WHEN params.key = "ga_session_id" THEN params.value.int_value ELSE NULL END) OVER(PARTITION BY event_timestamp, user_pseudo_id        ) AS ga_session_id,
+user_id AS user_id,
+user_pseudo_id        AS user_pseudo_id,
+TIMESTAMP_MICROS(user_first_touch_timestamp        ) AS user_first_touch_ts,
+event_name AS event_name,
+params.key AS params_key,
+params.value.string_value         AS params_string_value,
+params.value.int_value AS params_int,
+traffic_source.source        AS channel,
+traffic_source.medium AS traffic_medium,
+MAX(CASE WHEN params.key = "page_title" THEN params.value.int_value ELSE NULL END) OVER(PARTITION BY event_timestamp, user_pseudo_id        ) AS ga_page_title,
+MAX(CASE WHEN params.key = "page_location" THEN params.value.int_value ELSE NULL END) OVER(PARTITION BY event_timestamp, user_pseudo_id        ) AS ga_page_location, 
+geo.city AS city, 
+device.category AS device, 
+device.mobile_brand_name        AS device_mobile_brand,
+device.mobile_marketing_name AS device_mobile_name,
+device.operating_system AS devide_system,
+device.operating_system_version AS device_system_version
+FROM `ga4-landingpage.analytics_268605385.events_*` AS events
+LEFT JOIN UNNEST (event_params) AS params
+WHERE  PARSE_DATE("%Y%m%d", _TABLE_SUFFIX)> DATE_ADD(CURRENT_DATE(), INTERVAL -2 DAY)
+LIMIT 1000
+), event_aggregated AS (
+SELECT 
+ga_session_id,
+user_pseudo_id,
+MIN(event_date) AS date,
+MIN(event_ts) AS event_ts,
+MAX(channel) AS channel,
+MAX(traffic_medium) AS traffic_medium,
+MAX(ga_page_title) AS ga_page_title,
+MAX(ga_page_location) AS ga_page_location,
+MAX(city) AS city,
+MAX(device) AS device,
+MAX(device_mobile_brand) AS device_mobile_brand,
+MAX(device_mobile_name) AS device_mobile_name,
+MAX(devide_system) AS devide_system,
+MAX(device_system_version) AS device_system_version
+FROM source_table
+GROUP BY 1,2
+)
+SELECT * FROM event_aggregated
+ORDER BY
