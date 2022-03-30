@@ -1,4 +1,5 @@
-**GA4_ACCESS DATE PERIOD** 
+-- ACCESS DATE PERIOD
+
 SELECT  DISTINCT PARSE_DATE('%Y%m%d', event_date) AS event_date,
 FROM `ga4-landingpage.analytics_268605385.events_*` 
 WHERE  PARSE_DATE("%Y%m%d", _TABLE_SUFFIX) BETWEEN '2021-07-24' AND '2021-07-26'
@@ -8,7 +9,8 @@ ORDER BY event_date
 LIMIT 1000 
 
 
-#### GA3_DEDUPING QUERY RESULTS _WINDOW FUNCTION
+-- GA3_DEDUPING QUERY RESULTS _WINDOW FUNCTION
+
 SELECT * FROM(
 SELECT 
 date,
@@ -20,7 +22,8 @@ WHERE visitStartTime= lv
 ORDER BY channelGrouping
 
 
-WINDOW FUNCTION
+-- WINDOW FUNCTION_PAGEVIEW TABLE
+
 SELECT 
 date,
 channelGrouping,
@@ -37,8 +40,8 @@ FROM (
   )
   WINDOW w1 as (PARTITION BY date)
     order by pct_of_pageviews
-GA4_UNNEST HITS
-
+    
+-- UNNEST HITS
 
 SELECT new_event_params.*, events.* 
 EXCEPT (event_params)
@@ -51,7 +54,8 @@ AND new_event_params.value.string_value = "https://www.cafe24.vn/competition2021
 LIMIT 1000
 
 
-GA4_GETTING SESSION ID 
+-- CREATE SESSION ID TABLE
+
 SELECT params.*, events.*,
 PARSE_DATE("%Y%m%d", event_date) AS event_date,
 TIMESTAMP_MICROS(event_timestamp) AS event_ts,
