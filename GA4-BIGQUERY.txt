@@ -183,4 +183,4 @@ FROM source_table
 GROUP BY 1,2
 )
 SELECT * FROM event_aggregated
-ORDER BY
+ORDER BY 
